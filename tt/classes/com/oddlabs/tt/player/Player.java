@@ -39,8 +39,13 @@ public final strictfp class Player implements PlayerInterface {
 	public final static int INITIAL_UNIT_COUNT = 20;
 	public final static int MAX_BUILDING_COUNT = 20;
 	public final static int DEFAULT_MAX_UNIT_COUNT = 250;
-
-	public static final float[][] COLORS = {{1f, .75f, 0f, 1f},
+	public static final float[][] DEFAULT_COLORS = {{1f, .75f, 0f, 1f},
+												{0f, .5f, 1f, 1f},
+												{1f, 0f, .25f, 1f},
+												{0f, 1f, .75f, 1f},
+												{.75f, 0f, 1f, 1f},
+												{.75f, 1f, 0f, 1f}};
+	public static float[][] COLORS = {{1f, .75f, 0f, 1f},
 											{0f, .5f, 1f, 1f},
 											{1f, 0f, .25f, 1f},
 											{0f, 1f, .75f, 1f},
