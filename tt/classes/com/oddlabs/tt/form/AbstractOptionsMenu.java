@@ -400,6 +400,13 @@ public abstract strictfp class AbstractOptionsMenu extends Form {
         compileCanvas();
     }
 
+    /**
+     * Creates a UI group for changing player colors. 
+     * Returns ui group so it can be added to any other ui element.
+     * Colors are split into two rows players 1-3 and 4-6 and uses hex color codes for allowing
+     * any color a user may want to use. Upon updating colors the labels of the colors are updated to their
+     * respective hex values
+     */
     private final Group CreatePlayerColorGroup() {
         Group group_player_colors = new Group();
         java.awt.Color[] colors = new java.awt.Color[Player.COLORS.length];
@@ -414,7 +421,7 @@ public abstract strictfp class AbstractOptionsMenu extends Form {
             colors[i] = new java.awt.Color(Player.COLORS[i][0], Player.COLORS[i][1], Player.COLORS[i][2], Player.COLORS[i][3]);
             // Convert to hex string
             String hex = String.format("#%02X%02X%02X", colors[i].getRed(), colors[i].getGreen(), colors[i].getBlue());
-            EditLine hexBox = new EditLine(120, 7); // width 120, max length 6
+            EditLine hexBox = new EditLine(120, 7, "0123456789ABCDEFabcdef", EditLine.LEFT_ALIGNED);
             hexBox.append(hex);
             hexboxes[i] = hexBox;
             playerLabels[i] = colorLabel;
