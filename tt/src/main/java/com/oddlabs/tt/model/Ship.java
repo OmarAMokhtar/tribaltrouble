@@ -19,6 +19,7 @@ import com.oddlabs.tt.particle.LinearEmitter;
 import com.oddlabs.tt.particle.RandomVelocityEmitter;
 import com.oddlabs.tt.pathfinder.Movable;
 import com.oddlabs.tt.pathfinder.Occupant;
+import com.oddlabs.tt.pathfinder.StaticOccupant;
 import com.oddlabs.tt.pathfinder.PathTracker;
 import com.oddlabs.tt.pathfinder.UnitGrid;
 import com.oddlabs.tt.player.Player;
@@ -631,7 +632,12 @@ public class Ship extends Building implements Movable {
                         dir_y,
                         half_length_meters,
                         half_width_meters)) {
-                    if (!unit_grid.isWater(x, y) && unit_grid.isGridOccupied(x, y, UnitGrid.LAND)) {
+                    Occupant occ = unit_grid.getOccupant(x, y, UnitGrid.LAND);
+                    if (occ != null && !(occ instanceof StaticOccupant)) {
+                        return false;
+                    }
+                    occ = unit_grid.getOccupant(x, y, UnitGrid.SEA);
+                    if (occ != null && !(occ instanceof StaticOccupant)) {
                         return false;
                     }
                 }
