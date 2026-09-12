@@ -257,7 +257,8 @@ public final class Landscape {
             int[] bounds = new int[4];
             island_ids.floodfill(pos[0], pos[1], (float) last_id, 0.01f, count, bounds);
             int area = count[0];
-            IslandInfo info = new IslandInfo(last_id, area, bounds[0], bounds[1], bounds[2], bounds[3], pos[0], pos[1], dock, island_ids);
+            IslandInfo info = new IslandInfo(last_id, area, bounds[0], bounds[1], bounds[2], bounds[3], pos[0], pos[1],
+                    dock, island_ids);
             island_info.put(last_id, info);
             last_id++;
         }
