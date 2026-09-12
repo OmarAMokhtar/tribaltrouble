@@ -70,6 +70,8 @@ public final class AdvancedAI extends AI {
 
     private @Nullable LandscapeTarget defense_target = null;
 
+    private @Nullable IslandInfo init_island = null;
+
     public AdvancedAI(@NonNull Player owner, UnitInfo unit_info, int difficulty) {
         super(owner, unit_info);
         this.difficulty = difficulty;
@@ -98,7 +100,7 @@ public final class AdvancedAI extends AI {
                     nodeBuildShipAndLoad();
                 nodeUseShip();
             } else {
-                nodePickIsland();
+                nodePickInitIsland();
             }
         }
 
@@ -488,7 +490,7 @@ public final class AdvancedAI extends AI {
 
     private boolean baseBuildingsDone() {
         return getQuarters() != null && getArmory() != null
-                && !quartersUnderConstruction() && !armoryUnderConstruction() && !towerUnderConstruction();
+                && !quartersUnderConstruction() && !armoryUnderConstruction();
     }
 
     private void nodeBuildShipAndLoad() {
@@ -513,62 +515,47 @@ public final class AdvancedAI extends AI {
         return ships;
     }
 
-    private void nodePickIsland() {
+    private void nodePickInitIsland() {
         Ship ship = getInitShip();
         if (ship == null) {
             return;
         }
-        if (ship.getEntrance() == ship) {
-            if (!ship.isMoving()) {
-                var islands = getOwner().getWorld().getHeightMap().getIslandInfos();
-                IslandInfo best = null;
-                int best_d2 = 1000;
-                int contact_x = 0;
-                int contact_y = 0;
-                for (int i = 0; i < islands.size(); i++) {
-                    var island = islands.get(i);
-                    if (island.trees() > 25 && island.rocks() > 10 && island.iron() > 10) {
-                        int[] cxs = new int[8];
-                        int[] cys = new int[8];
-                        cxs[0] = island.minX();
-                        cys[0] = island.minY();
-                        cxs[1] = island.minX();
-                        cys[1] = island.centerY();
-                        cxs[2] = island.minX();
-                        cys[2] = island.maxY();
-                        cxs[3] = island.centerX();
-                        cys[3] = island.minY();
-                        cxs[4] = island.centerX();
-                        cys[4] = island.maxY();
-                        cxs[5] = island.maxX();
-                        cys[5] = island.minY();
-                        cxs[6] = island.maxX();
-                        cys[6] = island.centerY();
-                        cxs[7] = island.maxX();
-                        cys[7] = island.maxY();
-                        for (int j = 0; j < 8; j++) {
-                            int dx = cxs[j] - ship.getGridX();
-                            int dy = cys[j] - ship.getGridY();
-                            int d2 = dx * dx + dy * dy;
-                            if (best == null || d2 < best_d2) {
-                                best = island;
-                                best_d2 = d2;
-                                contact_x = cxs[j];
-                                contact_y = cys[j];
-                            }
+
+        if (init_island == null) {
+            var islands = getOwner().getWorld().getHeightMap().getIslandInfos();
+            IslandInfo best = null;
+            int best_d2 = 1000;
+            int contact_x = 0;
+            int contact_y = 0;
+            for (int i = 0; i < islands.size(); i++) {
+                var island = islands.get(i);
+                if (island.trees() > 25 && island.rocks() > 10 && island.iron() > 10) {
+                    for (var pt : island.contourPoints()) {
+                        int dx = pt[0] - ship.getGridX();
+                        int dy = pt[1] - ship.getGridY();
+                        int d2 = dx * dx + dy * dy;
+                        if (best == null || d2 < best_d2) {
+                            best = island;
+                            best_d2 = d2;
+                            contact_x = pt[0];
+                            contact_y = pt[1];
                         }
                     }
                 }
-                if (best != null) {
-                    getOwner().setSailingTarget(Selectable.newArray(ship), (best.centerX() + contact_x) / 2,
-                            (best.centerY() + contact_y) / 2);
-                }
+            }
+            if (best != null) {
+                getOwner().setSailingTarget(Selectable.newArray(ship), contact_x, contact_y);
+                init_island = best;
             }
             return;
         }
 
+        if (ship.getEntrance() != ship && ship.getEntrance().getIslandId() != init_island.id()) {
+            return;
+        }
+
         if (ship.getShipHR().countUnits() > 0) {
-            getOwner().deployUnits(ship, DeployType.PEON, ship.getShipHR().countPeons());
+            deployWholeShip(ship);
         } else {
             setFoundIsland();
         }
@@ -590,11 +577,13 @@ public final class AdvancedAI extends AI {
         boolean battle_ready = (shipBattleReady(ship) && at_home) || !should_escape;
 
         if (battle_ready) {
-            Selectable<?> sea_enemy = getOwner().findNearestEnemyShip(ship.getGridX(), ship.getGridY());
+            Selectable<?> sea_enemy = getOwner().findNearestEnemy(ship.getGridX(), ship.getGridY(),
+                    s -> s instanceof Ship);
             if (sea_enemy != null && sea_enemy.isDead()) {
                 sea_enemy = null;
             }
-            Selectable<?> beach_enemy = getOwner().findNearestEnemyOnBeach(ship.getGridX(), ship.getGridY());
+            Selectable<?> beach_enemy = getOwner().findNearestEnemy(ship.getGridX(), ship.getGridY(),
+                    s -> objectOnBeach(s));
             if (beach_enemy != null && beach_enemy.isDead()) {
                 beach_enemy = null;
             }
@@ -618,17 +607,38 @@ public final class AdvancedAI extends AI {
             }
 
             if (enemy != null) {
-                getOwner().setTarget(Selectable.newArray(ship), enemy, Action.MOVE, true);
+                getOwner().setSailingTarget(Selectable.newArray(ship), enemy);
                 return;
             }
         }
 
         if (!at_home) {
-            Building origin = homeBuilding();
-            if (origin != null) {
-                getOwner().setTarget(Selectable.newArray(ship), origin, Action.MOVE, false);
+            Building home = homeBuilding();
+            if (home != null) {
+                getOwner().setSailingTarget(Selectable.newArray(ship), home);
             }
         }
+    }
+
+    private boolean objectOnBeach(@NonNull Selectable s) {
+        var dock = getOwner().getWorld().getHeightMap().getDockGrid();
+        var map_size = getOwner().getWorld().getHeightMap().getGridUnitsPerWorld();
+        int x = s.getGridX();
+        int y = s.getGridY();
+        int size = StrictMath.round(s.getSize());
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                int cx = x + i - size / 2;
+                int cy = y + i - size / 2;
+                if (cx < 0 || cx >= map_size || cy < 0 || cy >= map_size) {
+                    continue;
+                }
+                if (dock[cy][cx] != 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean shipBattleReady(@NonNull Ship ship) {
@@ -672,7 +682,60 @@ public final class AdvancedAI extends AI {
         return home != null ? home.getIslandId() : -1;
     }
 
-    private boolean shipAtHome(@NonNull Ship ship) {
+    private boolean isShipNearIsland(Selectable s, IslandInfo info) {
+        if (!(s instanceof Ship)) {
+            return false;
+        }
+
+        int dx = info.centerX() - s.getGridX();
+        int dy = info.centerY() - s.getGridY();
+        int d2 = dx * dx + dy * dy;
+        int r = Math.max(info.maxX() - info.minX(), info.maxY() - info.minY());
+        if (d2 < r * r) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean shipsAroundIsland(IslandInfo info) {
+        Selectable<?> enemy = getOwner().findNearestEnemy(info.centerX(), info.centerY(), s -> isShipNearIsland(s,
+                info));
+        return enemy != null;
+    }
+
+    private boolean islandHasEnemies(int island) {
+        var info = getOwner().getWorld().getHeightMap().getIslandInfo(island);
+        if (info == null) {
+            return false;
+        }
+        Selectable<?> enemy = getOwner().findNearestEnemy(info.centerX(), info.centerY(),
+                s -> s.getIslandId() == island);
+        return enemy != null;
+    }
+
+    private boolean homeHasEnemies() {
+        int id = homeIsland();
+        var info = getOwner().getWorld().getHeightMap().getIslandInfo(id);
+        boolean on_land = islandHasEnemies(id);
+        boolean around = shipsAroundIsland(info);
+        return on_land || around;
+    }
+
+    private void deployWholeShip(Ship ship) {
+        int peons = ship.getShipHR().countPeons();
+        int warriors = ship.getShipHR().countUnits() - peons;
+        if (warriors > 0) {
+            getOwner().deployUnits(ship, DeployType.RUBBER_WARRIOR, warriors);
+            getOwner().deployUnits(ship, DeployType.IRON_WARRIOR, warriors);
+            getOwner().deployUnits(ship, DeployType.ROCK_WARRIOR, warriors);
+        }
+        if (peons > 0) {
+            getOwner().deployUnits(ship, DeployType.PEON, peons);
+        }
+    }
+
+    private boolean shipAtHome(Ship ship) {
         Building entrance = ship.getEntrance();
         if (entrance == null) {
             return false;
@@ -725,7 +788,7 @@ public final class AdvancedAI extends AI {
             getOwner().setTarget(lastN(idle, missing), ship, action, false);
         } else {
             Building origin = homeBuilding();
-            buildBuilding(Race.BUILDING_SHIP, firstN(idle, SHIP_BUILDERS), origin.getGridX(), origin.getGridY());
+            buildShip(firstN(idle, SHIP_BUILDERS), origin.getGridX(), origin.getGridY());
         }
     }
 
@@ -873,9 +936,29 @@ public final class AdvancedAI extends AI {
         return squared_dist_target < squared_dist_building / 2 ? best_target : best_building;
     }
 
-    private boolean buildBuilding(int building_type, Selectable<?> @NonNull [] selection, int grid_x, int grid_y) {
+    private boolean buildShip(Selectable<?> @NonNull [] selection, int grid_x, int grid_y) {
+        if (selection.length == 0) {
+            return false;
+        }
         BuildingSiteScanFilter filter = new BuildingSiteScanFilter(getUnitGrid(),
-                getOwner().getRace().getBuildingTemplate(building_type), 40, true);
+                getOwner().getRace().getBuildingTemplate(Race.BUILDING_SHIP), 100, true, selection[0].getIslandId());
+        getUnitGrid().scan(filter, grid_x, grid_y);
+        List<? extends Target> target_list = filter.getResult();
+        if (!target_list.isEmpty()) {
+            Target target = target_list.getFirst();
+            getOwner().placeBuilding(selection, Race.BUILDING_SHIP, target.getGridX(), target.getGridY());
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private boolean buildBuilding(int building_type, Selectable<?> @NonNull [] selection, int grid_x, int grid_y) {
+        if (selection.length == 0) {
+            return false;
+        }
+        BuildingSiteScanFilter filter = new BuildingSiteScanFilter(getUnitGrid(),
+                getOwner().getRace().getBuildingTemplate(building_type), 40, true, selection[0].getIslandId());
         getUnitGrid().scan(filter, grid_x, grid_y);
         List<? extends Target> target_list = filter.getResult();
         if (!target_list.isEmpty()) {
